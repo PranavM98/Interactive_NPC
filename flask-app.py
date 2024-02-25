@@ -2,16 +2,33 @@ from flask import Flask, render_template_string, request, redirect, url_for
 from speech_to_text import execute
 import pathlib
 import textwrap
-
+import threading
 import google.generativeai as genai
-
+import playsound
+from pydub import AudioSegment
+from pydub.playback import _play_with_simpleaudio
+import simpleaudio as sa
 from IPython.display import display
 from IPython.display import Markdown
 
 import PIL.Image
 import gemini_pro
+# This will hold the playback object
+global_playback_object = None
 
 app = Flask(__name__, static_folder='static')
+
+print("------------Model Initialization------------")
+GOOGLE_API_KEY='******'
+
+genai.configure(api_key=GOOGLE_API_KEY)
+
+model = genai.GenerativeModel('gemini-pro')
+chat = model.start_chat(history=[])
+#Get the context
+print("------------Learning the Context------------")
+chat = gemini_pro.get_context(chat)
+print(chat.history)
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -24,7 +41,7 @@ HTML_TEMPLATE = """
         body {
             font-family: 'Arial', sans-serif;
             color: #333;
-            background-image: url('{{ url_for('static', filename='background_img.jpg') }}');
+            background-image: url('{{ url_for('static', filename='background_img.png') }}');
 
 
             display: flex;
@@ -80,7 +97,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container">
-            <div class="heading">INTERACTIVE NPC</div>
+            <div class="heading">Echoes of Eternity</div>
         <div class="form-container">
             <form method="post" style="display: flex; flex-grow: 1;">
                 <input type="text" name="user_input" placeholder="Enter your text here">
@@ -112,6 +129,23 @@ HTML_TEMPLATE = """
 # Store submitted texts
 texts = []
 
+def play_audio():
+    global global_playback_object
+    # Check if there is an ongoing playback
+    if global_playback_object is not None:
+        # Stop the ongoing playback
+        global_playback_object.stop()
+        global_playback_object = None  # Reset the global playback object
+
+    
+    
+
+    # Load the audio file
+    audio = AudioSegment.from_file('response.mp3')
+    # Start playback
+    playback = _play_with_simpleaudio(audio)
+    global_playback_object = playback  # Store the playback object globally
+
 
 
 @app.route('/execute_test_function', methods=['POST'])
@@ -120,9 +154,13 @@ def execute_test_function():
     output = execute()
     texts.append({'text': output, 'type': 'normal'})  # or 'special', if appropriate
 
-    llm_output=gemini_pro.process_user_query(output)
+    llm_output=gemini_pro.process_user_query(chat, output)
     texts.append({'text': llm_output, 'type': 'special'})
 
+    # # Create a thread to play audio
+    # audio_thread = threading.Thread(target=play_audio)
+
+    # audio_thread.start()
     return redirect(url_for('index'))
 
 
@@ -135,8 +173,13 @@ def index():
 
         texts.append({'text': user_input, 'type': 'normal'})
 
-        llm_output=gemini_pro.process_user_query(user_input)
+        llm_output=gemini_pro.process_user_query(chat,user_input)
         texts.append({'text': llm_output, 'type': 'special'})
+
+        # # Create a thread to play audio
+        # audio_thread = threading.Thread(target=play_audio)
+
+        # audio_thread.start()
 
         return redirect(url_for('index'))
     return render_template_string(HTML_TEMPLATE, texts=texts)
