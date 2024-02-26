@@ -19,12 +19,13 @@ global_playback_object = None
 app = Flask(__name__, static_folder='static')
 
 print("------------Model Initialization------------")
-GOOGLE_API_KEY='******'
+GOOGLE_API_KEY='AIzaSyD5kgg-NbCPoOUejRV505nmuG-3UHVkZK8'
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
 model = genai.GenerativeModel('gemini-pro')
 chat = model.start_chat(history=[])
+
 #Get the context
 print("------------Learning the Context------------")
 chat = gemini_pro.get_context(chat)
@@ -36,7 +37,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive NPC</title>
+    <title>(FewShot)Interactive NPC</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -100,7 +101,7 @@ HTML_TEMPLATE = """
             <div class="heading">Echoes of Eternity</div>
         <div class="form-container">
             <form method="post" style="display: flex; flex-grow: 1;">
-                <input type="text" name="user_input" placeholder="Enter your text here">
+                <input type="text" name="user_input" placeholder=" Type HELP for hints.">
                 <button type="submit">Submit</button>
             </form>
             <form action="/execute_test_function" method="post" style="margin-left: 20px;">
@@ -130,65 +131,73 @@ HTML_TEMPLATE = """
 texts = []
 
 def play_audio():
-    global global_playback_object
-    # Check if there is an ongoing playback
-    if global_playback_object is not None:
-        # Stop the ongoing playback
-        global_playback_object.stop()
-        global_playback_object = None  # Reset the global playback object
-
-    
-    
+    '''
+    This function is used to playback the audio (text-to-speech LLM answer)
+    '''
 
     # Load the audio file
     audio = AudioSegment.from_file('response.mp3')
     # Start playback
     playback = _play_with_simpleaudio(audio)
-    global_playback_object = playback  # Store the playback object globally
-
 
 
 @app.route('/execute_test_function', methods=['POST'])
 def execute_test_function():
+    '''
+    This function is executed if the voice input is given.
+    '''
     global texts
+    #execute function will convert the voice to text and returns output, the text extracted from the voice
     output = execute()
-    texts.append({'text': output, 'type': 'normal'})  # or 'special', if appropriate
+    texts.append({'text': output, 'type': 'normal'})
 
-    llm_output=gemini_pro.process_user_query(chat, output)
+    #sending the text (user prompt) to the LLM
+    llm_output=gemini_pro.process_user_query_fs(chat, output)
+
+    #Special because it will be displayed in red
     texts.append({'text': llm_output, 'type': 'special'})
 
     # # Create a thread to play audio
-    # audio_thread = threading.Thread(target=play_audio)
+    audio_thread = threading.Thread(target=play_audio)
 
-    # audio_thread.start()
+    audio_thread.start()
     return redirect(url_for('index'))
 
 
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    '''
+    This function will be executed if the text input is used
+    '''
     global texts
     if request.method == 'POST':
+        #Extracting the text input from the textbox
         user_input = request.form['user_input']
 
         texts.append({'text': user_input, 'type': 'normal'})
+        #Sending the user prompt to the LLM
+        llm_output=gemini_pro.process_user_query_fs(chat,user_input)
 
-        llm_output=gemini_pro.process_user_query(chat,user_input)
+        #Special because it will be displayed in red
         texts.append({'text': llm_output, 'type': 'special'})
 
         # # Create a thread to play audio
-        # audio_thread = threading.Thread(target=play_audio)
+        audio_thread = threading.Thread(target=play_audio)
 
-        # audio_thread.start()
+        audio_thread.start()
 
         return redirect(url_for('index'))
     return render_template_string(HTML_TEMPLATE, texts=texts)
 
 @app.route('/clear', methods=['POST'])
 def clear():
+    '''
+    Function to clear the texts from the UI
+    '''
     global texts
     texts.clear()
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=8001)
