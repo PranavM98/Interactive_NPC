@@ -19,7 +19,7 @@ global_playback_object = None
 app = Flask(__name__, static_folder='static')
 
 print("------------Model Initialization------------")
-GOOGLE_API_KEY='AIzaSyD5kgg-NbCPoOUejRV505nmuG-3UHVkZK8'
+GOOGLE_API_KEY='*****'
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
